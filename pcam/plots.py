@@ -78,8 +78,7 @@ def plot_worst_mistakes(dataset: PCamPatches, result: EvalResult, path: Path, n:
 
     for ax, i in zip(np.ravel(axes), worst):
         index = int(result.indices[i])
-        image, _ = dataset.base[index]          # raw image, without normalisation
-        ax.imshow(image)
+        ax.imshow(dataset.load_image(index))    # raw image, without normalisation
         ax.add_patch(Rectangle((32, 32), 32, 32, fill=False, edgecolor="yellow",
                                linestyle="--", linewidth=1.2))
         ax.set_title(f"#{index}  true: {CLASS_NAMES[result.labels[i]]}\n"
