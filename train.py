@@ -31,6 +31,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    # Print each line immediately, even when output goes to a file or another
+    # program (by default Python then buffers it and progress shows up late).
+    sys.stdout.reconfigure(line_buffering=True)
     args = parse_args()
     try:
         cfg = load_config(args.config)
@@ -67,7 +70,8 @@ def main() -> None:
 
     for epoch in range(1, cfg.training.epochs + 1):
         epoch_start = time.time()
-        train_loss, train_acc = train_one_epoch(model, loaders["train"], optimizer, loss_fn, device)
+        train_loss, train_acc = train_one_epoch(model, loaders["train"], optimizer, loss_fn, device,
+                                                log_prefix=f"  epoch {epoch}/{cfg.training.epochs} ")
         val = evaluate(model, loaders["val"], loss_fn, device)
         val_metrics = compute_metrics(val.labels, val.probs)
         val_auc = val_metrics["auc"] if val_metrics["auc"] is not None else 0.0
