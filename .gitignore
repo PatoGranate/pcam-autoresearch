@@ -1,0 +1,8 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+
+# Dataset (~7.5 GB) and experiment outputs stay local
+data/
+runs/
