@@ -1,0 +1,17 @@
+# Smoke test: tiny subset, 1 epoch. Checks the whole pipeline runs end to end.
+# The numbers it produces are meaningless; only "did it finish?" matters.
+run_name: smoke
+seed: 42
+
+data:
+  root: data
+  subset_fraction: 0.01   # ~2.6k train / ~330 val patches (test is always full)
+  num_workers: 2
+
+model:
+  name: small_cnn
+
+training:
+  epochs: 1
+  batch_size: 128
+  lr: 0.001

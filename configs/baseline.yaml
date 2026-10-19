@@ -1,0 +1,17 @@
+# Baseline: small CNN trained from scratch on the full dataset.
+run_name: baseline_cnn
+seed: 42
+
+data:
+  root: data
+  subset_fraction: 1.0    # 1.0 = all 262k training patches; try 0.1 for quick runs
+  num_workers: 2
+
+model:
+  name: small_cnn
+
+training:
+  epochs: 10
+  batch_size: 128
+  lr: 0.001
+  weight_decay: 0.0001
