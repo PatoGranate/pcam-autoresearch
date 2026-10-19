@@ -1,5 +1,6 @@
 """Training and evaluation loops."""
 
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -22,12 +23,19 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     loss_fn: nn.Module,
     device: torch.device,
+    log_prefix: str = "",
 ) -> tuple[float, float]:
-    """One pass over the training data. Returns (mean loss, accuracy)."""
+    """One pass over the training data. Returns (mean loss, accuracy).
+
+    Prints a progress line roughly every 10% of the epoch, starting with `log_prefix`.
+    """
     model.train()   # enables dropout and batch-norm statistic updates
     total_loss, correct, seen = 0.0, 0, 0
+    n_batches = len(loader)
+    report_at = {n_batches * k // 10 for k in range(1, 10)}   # batch numbers at ~10%, 20%, ... 90%
+    start = time.time()
 
-    for images, labels, _ in loader:
+    for step, (images, labels, _) in enumerate(loader, start=1):
         images = images.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True).float()
 
@@ -41,6 +49,13 @@ def train_one_epoch(
         total_loss += loss.item() * len(labels)
         correct += ((logits > 0) == labels.bool()).sum().item()   # logit > 0  <=>  prob > 0.5
         seen += len(labels)
+
+        if step in report_at:
+            elapsed = time.time() - start
+            remaining = elapsed / step * (n_batches - step)
+            print(f"{log_prefix}{step / n_batches:4.0%} ({step}/{n_batches} batches) | "
+                  f"loss {total_loss / seen:.4f} acc {correct / seen:.4f} | "
+                  f"{elapsed:.0f}s elapsed, ~{remaining:.0f}s left")
 
     return total_loss / seen, correct / seen
 
