@@ -1,0 +1,15 @@
+# Exact versions this project was developed and tested with.
+#
+# PyTorch: install first with the right build for your machine (see README).
+# A plain `pip install torch` on Windows/Linux gives a CPU-only build.
+torch==2.14.1
+torchvision==0.29.1
+
+# PCAM is stored as HDF5 files hosted on Google Drive
+h5py==3.16.0
+gdown==6.4.2
+
+pyyaml==6.0.3
+numpy==2.5.2
+scikit-learn==1.9.1
+matplotlib==3.11.2
