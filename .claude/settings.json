@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(gh pr merge *)",
+      "Bash(gh pr review *--approve*)",
+      "Bash(gh repo delete *)",
+      "Bash(gh api *)",
+      "Bash(git push * main)",
+      "Bash(git push *:main)",
+      "Bash(git push *--force*)",
+      "Bash(git push * -f*)",
+      "Bash(git push *--mirror*)",
+      "PowerShell(gh pr merge *)",
+      "PowerShell(gh pr review *--approve*)",
+      "PowerShell(gh repo delete *)",
+      "PowerShell(gh api *)",
+      "PowerShell(git push * main)",
+      "PowerShell(git push *:main)",
+      "PowerShell(git push *--force*)",
+      "PowerShell(git push * -f*)",
+      "PowerShell(git push *--mirror*)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "PowerShell(git push *)",
+      "Bash(gh pr create *)",
+      "PowerShell(gh pr create *)"
+    ]
+  }
+}
