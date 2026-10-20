@@ -78,6 +78,37 @@ def out_of_fold_probs(train_ds: PCamPatches, cfg: Config, device: torch.device) 
     return probs, folds
 
 
+def training_loss_history(train_ds: PCamPatches, cfg: Config, device: torch.device) -> np.ndarray:
+    """Per-patch training loss at every epoch, shape (epochs, n_patches), aligned with train_ds.indices.
+
+    One model trains on all the (noisy) labels. Clean patches are learned quickly, so their loss
+    falls early; a wrong label is only fitted late (by memorising), so its loss stays high.
+    """
+    set_seed(cfg.seed)
+    model = build_model(cfg.model).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.training.lr,
+                                  weight_decay=cfg.training.weight_decay)
+    loader = _loader(train_ds, np.arange(len(train_ds)), cfg, device, train=True, seed=cfg.seed)
+    loss_fn = nn.BCEWithLogitsLoss()
+    history = np.zeros((cfg.training.epochs, len(train_ds)))
+
+    for epoch in range(1, cfg.training.epochs + 1):
+        record = []
+        loss, acc = train_one_epoch(model, loader, optimizer, loss_fn, device, loss_record=record)
+        idx = np.concatenate([r[0] for r in record])
+        # train_ds.indices is sorted, so searchsorted turns patch ids back into array positions
+        history[epoch - 1, np.searchsorted(train_ds.indices, idx)] = np.concatenate([r[1] for r in record])
+        print(f"  epoch {epoch}/{cfg.training.epochs} | train loss {loss:.4f} acc {acc:.4f}")
+    return history
+
+
+def loss_history_to_probs(given: np.ndarray, history: np.ndarray) -> np.ndarray:
+    """Turn mean P(given label) over epochs (exp(-loss)) into a P(tumour), so the
+    confident-learning rule and suspicion score from the out-of-fold detector can be reused."""
+    p_given = np.exp(-history).mean(axis=0)
+    return np.where(given == 1, p_given, 1 - p_given)
+
+
 def confident_learning_flags(given: np.ndarray, probs: np.ndarray) -> np.ndarray:
     """Boolean mask: True where the label looks wrong (binary confident learning).
 

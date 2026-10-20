@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -24,10 +25,13 @@ def train_one_epoch(
     loss_fn: nn.Module,
     device: torch.device,
     log_prefix: str = "",
+    loss_record: list | None = None,
 ) -> tuple[float, float]:
     """One pass over the training data. Returns (mean loss, accuracy).
 
     Prints a progress line roughly every 10% of the epoch, starting with `log_prefix`.
+    If `loss_record` is a list, each batch appends (patch indices, per-patch losses) to it.
+    These are the losses of the very forward pass used for training, so recording is free.
     """
     model.train()   # enables dropout and batch-norm statistic updates
     total_loss, correct, seen = 0.0, 0, 0
@@ -35,12 +39,15 @@ def train_one_epoch(
     report_at = {n_batches * k // 10 for k in range(1, 10)}   # batch numbers at ~10%, 20%, ... 90%
     start = time.time()
 
-    for step, (images, labels, _) in enumerate(loader, start=1):
+    for step, (images, labels, indices) in enumerate(loader, start=1):
         images = images.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True).float()
 
         logits = model(images)
         loss = loss_fn(logits, labels)
+        if loss_record is not None:
+            per_patch = F.binary_cross_entropy_with_logits(logits.detach(), labels, reduction="none")
+            loss_record.append((indices.numpy(), per_patch.cpu().numpy()))
 
         optimizer.zero_grad()
         loss.backward()

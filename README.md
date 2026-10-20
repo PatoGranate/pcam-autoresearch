@@ -95,16 +95,23 @@ model's worst mistakes.
 python detect_noise.py --config configs/detection/cnn_noise10.yaml
 ```
 
-Trains `detection.folds` models; each predicts only the training patches it never saw
-(out-of-fold). A label the models confidently disagree with is flagged (confident
-learning: per-class confidence thresholds). With injected noise it also scores the flags
-against the known flips. Output folder:
+`detection.method` picks the detector:
+
+- `out_of_fold` (default): trains `detection.folds` models; each predicts only the training
+  patches it never saw. A label the models confidently disagree with is flagged (confident
+  learning: per-class confidence thresholds).
+- `training_loss` (`configs/detection/loss_noise*.yaml`): trains one model and records every
+  patch's loss at every epoch. Patches whose loss stays high are suspicious; the mean
+  P(given label) over epochs goes through the same confident-learning rule. About 5x cheaper.
+
+With injected noise both score the flags against the known flips. Output folder:
 
 | file | what it shows |
 |---|---|
 | `detection_metrics.json` | flags vs known flips: precision, recall, F1, AUC of the suspicion score, precision@k (k = number of flips); with clean labels only the number flagged |
 | `suspicion_scores.csv` | per patch: index, given label, out-of-fold P(tumour), suspicion (1 − P(given label)), flagged, is_flipped |
 | `flagged_indices.npy` | original train-split indices of the flagged patches |
+| `loss_history.npy` | `training_loss` only: per-patch loss, shape (epochs, patches), same order as the CSV (`oof_prob_tumour` there is the epoch-averaged P(tumour) for this method) |
 
 ## Reading the outputs
 
@@ -151,12 +158,12 @@ pcam/
   config.py     load + validate configs
   data.py       PCam datasets, subsets, augmentation, DataLoaders
   noise.py      flip a known fraction of train labels (Phase 2)
-  noise_detection.py  out-of-fold predictions, confident-learning flags, scoring vs known flips
+  noise_detection.py  out-of-fold + training-loss detectors, confident-learning flags, scoring vs known flips
   models.py     SmallCNN and ResNet18
   engine.py     training and evaluation loops
   metrics.py    accuracy, AUC, precision, recall, F1
   plots.py      curves, confusion matrix, worst-mistakes grid
   utils.py      seeding, device selection, run folders
 train.py        one experiment, end to end
-detect_noise.py find suspicious training labels (out-of-fold)
+detect_noise.py find suspicious training labels (out-of-fold or training-loss)
 ```

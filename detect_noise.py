@@ -1,8 +1,9 @@
 """Find suspicious training labels: python detect_noise.py --config configs/detection/cnn_noise10.yaml
 
-Trains K fold models on the (noisy) training subset, predicts each patch with the
-model that never saw it, flags labels the models confidently disagree with, and
-scores the flags against the known flips when label noise was injected.
+Two methods (detection.method): out_of_fold trains K fold models and flags labels that the
+model that never saw the patch confidently disagrees with; training_loss trains one model and
+ranks patches by how high their loss stays during training. Flags are scored against the
+known flips when label noise was injected.
 Writes everything into runs/<run_name>_<timestamp>/ ; the last line printed is that folder.
 """
 
@@ -16,8 +17,8 @@ import yaml
 
 from pcam.config import ConfigError, load_config
 from pcam.data import build_datasets
-from pcam.noise_detection import (confident_learning_flags, out_of_fold_probs,
-                                  score_detector, suspicion_score)
+from pcam.noise_detection import (confident_learning_flags, loss_history_to_probs, out_of_fold_probs,
+                                  score_detector, suspicion_score, training_loss_history)
 from pcam.utils import get_device, make_run_dir, set_seed
 
 
@@ -49,7 +50,12 @@ def main() -> None:
     is_flipped = np.isin(indices, train_ds.flipped_indices)   # ground truth (all False without noise)
     print(f"Train patches: {len(indices):,} | injected flips: {int(is_flipped.sum()):,}")
 
-    probs, folds = out_of_fold_probs(train_ds, cfg, device)
+    if cfg.detection.method == "out_of_fold":
+        probs, folds = out_of_fold_probs(train_ds, cfg, device)
+    else:   # training_loss: one model, losses recorded while it trains
+        history = training_loss_history(train_ds, cfg, device)
+        np.save(run_dir / "loss_history.npy", history.astype(np.float32))   # (epochs, patches)
+        probs, folds = loss_history_to_probs(given, history), []
 
     score = suspicion_score(given, probs)
     flagged = confident_learning_flags(given, probs)
@@ -68,7 +74,8 @@ def main() -> None:
         "model": cfg.model.name,
         "device": str(device),
         "noise": {"flip_fraction": cfg.noise.flip_fraction, "seed": cfg.noise.seed},
-        "folds": cfg.detection.folds,
+        "method": cfg.detection.method,
+        "folds": cfg.detection.folds if cfg.detection.method == "out_of_fold" else None,
         "epochs_per_fold": cfg.training.epochs,
         "fold_summaries": folds,
         "detection": result,
