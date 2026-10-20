@@ -58,6 +58,8 @@ in the YAML file:
 | `seed` | seed for weights init, subset choice, shuffling and augmentation |
 | `data.subset_fraction` | fraction of train/val to use (e.g. `0.1`); test always uses all 32,768 patches |
 | `data.num_workers` | parallel data-loading processes (`0` = load in the main process) |
+| `noise.flip_fraction` | share of **train** labels to flip, 0 to 0.5 (default 0 = clean); val and test are never touched |
+| `noise.seed` | picks which labels flip; independent of `seed`, so every model sees the same flips |
 | `model.name` | `small_cnn` or `resnet18` |
 | `model.pretrained` | `resnet18` only: start from ImageNet weights |
 | `training.epochs`, `batch_size`, `lr`, `weight_decay` | optimiser settings (AdamW) |
@@ -100,6 +102,7 @@ Each run writes to `runs/<run_name>_<timestamp>/`:
 | `worst_mistakes.png` | the 16 test patches the model got wrong most confidently |
 | `test_predictions.csv` | every test patch: index, true label, predicted P(tumour) |
 | `best_model.pt` | weights from the epoch with the best validation AUC |
+| `flipped_indices.npy` | only when noise is on: original train-split indices of the flipped labels (the ground truth for detectors); `metrics.json` also records the `noise` settings |
 
 How to read them:
 
@@ -129,6 +132,7 @@ scripts/        summarize_runs.py: finished runs -> runs/report.html
 pcam/
   config.py     load + validate configs
   data.py       PCam datasets, subsets, augmentation, DataLoaders
+  noise.py      flip a known fraction of train labels (Phase 2)
   models.py     SmallCNN and ResNet18
   engine.py     training and evaluation loops
   metrics.py    accuracy, AUC, precision, recall, F1

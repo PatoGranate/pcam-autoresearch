@@ -14,6 +14,7 @@ from torchvision import transforms
 from torchvision.datasets import PCAM
 
 from pcam.config import Config
+from pcam.noise import inject_label_noise
 from pcam.utils import seed_worker
 
 # ImageNet statistics: what the pretrained ResNet18 expects. We use them for the
@@ -114,6 +115,13 @@ def build_datasets(cfg: Config) -> dict[str, PCamPatches]:
         indices = sample_indices(n, fraction, cfg.seed)
         datasets[split] = PCamPatches(cfg.data.root, split, indices,
                                       build_transform(train=(split == "train")))
+
+    # Label noise goes into the train split only. `flipped_indices` are original-split
+    # patch indices, the same ids the Dataset returns, so detectors can be scored against them.
+    train = datasets["train"]
+    train.clean_labels = train.labels.copy()
+    train.flipped_indices = inject_label_noise(train.labels, train.indices,
+                                               cfg.noise.flip_fraction, cfg.noise.seed)
     return datasets
 
 

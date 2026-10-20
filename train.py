@@ -53,6 +53,17 @@ def main() -> None:
     sizes = {split: len(loader.dataset) for split, loader in loaders.items()}
     print(f"Patches: train {sizes['train']:,} | val {sizes['val']:,} | test {sizes['test']:,}")
 
+    # Record exactly which train labels were flipped, so detectors can be scored later.
+    train_ds = loaders["train"].dataset
+    noise_info = {
+        "flip_fraction": cfg.noise.flip_fraction,
+        "seed": cfg.noise.seed,
+        "n_flipped": int(len(train_ds.flipped_indices)),
+    }
+    if noise_info["n_flipped"]:
+        np.save(run_dir / "flipped_indices.npy", train_ds.flipped_indices)
+        print(f"Label noise: flipped {noise_info['n_flipped']:,} of {sizes['train']:,} train labels")
+
     model = build_model(cfg.model).to(device)
     print(f"Model: {cfg.model.name} ({count_parameters(model):,} trainable parameters)")
 
@@ -121,6 +132,7 @@ def main() -> None:
         "n_train": sizes["train"],
         "n_val": sizes["val"],
         "n_test": sizes["test"],
+        "noise": noise_info,
         "best_epoch": best_epoch,
         "best_val_auc": best_auc,
         "test": test_metrics,
