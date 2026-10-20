@@ -42,6 +42,15 @@ class NoiseConfig:
 
 
 @dataclass
+class DetectionConfig:
+    folds: int = 5                  # K for out-of-fold prediction (used by detect_noise.py only)
+
+    def __post_init__(self):
+        if self.folds < 2:
+            raise ConfigError(f"detection.folds must be >= 2, got {self.folds}")
+
+
+@dataclass
 class ModelConfig:
     name: str = "small_cnn"         # one of MODEL_NAMES
     pretrained: bool = True         # only used by resnet18 (ImageNet weights)
@@ -73,6 +82,7 @@ class Config:
     seed: int = 42
     data: DataConfig = field(default_factory=DataConfig)
     noise: NoiseConfig = field(default_factory=NoiseConfig)
+    detection: DetectionConfig = field(default_factory=DetectionConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
 
@@ -98,7 +108,8 @@ def load_config(path: str | Path) -> Config:
     path = Path(path)
     if not path.exists():
         raise ConfigError(f"Config file not found: {path}")
-    raw = yaml.safe_load(path.read_text()) or {}
+    # utf-8-sig: tolerate the byte-order mark some Windows editors/PowerShell add to files
+    raw = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
 
     if "run_name" not in raw:
         raise ConfigError("Config must define 'run_name'")
@@ -106,6 +117,7 @@ def load_config(path: str | Path) -> Config:
     sections = {
         "data": DataConfig,
         "noise": NoiseConfig,
+        "detection": DetectionConfig,
         "model": ModelConfig,
         "training": TrainingConfig,
     }

@@ -1,0 +1,24 @@
+# Out-of-fold label-noise detector: small CNN, 10% subset, 0% of train labels flipped.
+run_name: oof_noise0
+seed: 42
+
+data:
+  root: data
+  subset_fraction: 0.1
+  num_workers: 2
+
+noise:
+  flip_fraction: 0.0
+  seed: 0
+
+detection:
+  folds: 5
+
+model:
+  name: small_cnn
+
+training:
+  epochs: 4
+  batch_size: 128
+  lr: 0.001
+  weight_decay: 0.0001
