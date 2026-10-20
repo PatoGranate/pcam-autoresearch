@@ -1,0 +1,20 @@
+# Fine-tune an ImageNet-pretrained ResNet18.
+# Lower learning rate than the CNN: the pretrained weights are already good,
+# so we nudge them rather than overwrite them.
+run_name: resnet18_pretrained_s43
+seed: 43
+
+data:
+  root: data
+  subset_fraction: 1.0
+  num_workers: 2
+
+model:
+  name: resnet18
+  pretrained: true
+
+training:
+  epochs: 5
+  batch_size: 64          # smaller batch fits comfortably in 4 GB of GPU memory
+  lr: 0.0001
+  weight_decay: 0.0001

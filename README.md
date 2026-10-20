@@ -64,6 +64,28 @@ in the YAML file:
 
 Unknown keys or invalid values stop the run immediately with a clear error message.
 
+### Seed sweep and summary page
+
+`configs/seed_sweep/` holds the CNN and ResNet18 configs for seeds 43 and 44 (seed 42 is
+`baseline.yaml` / `resnet18.yaml`). Run them **one at a time** (each is 25+ min on a laptop GPU,
+and two at once doubles memory use):
+
+```bash
+python train.py --config configs/seed_sweep/baseline_cnn_s43.yaml
+python train.py --config configs/seed_sweep/baseline_cnn_s44.yaml
+python train.py --config configs/seed_sweep/resnet18_pretrained_s43.yaml
+python train.py --config configs/seed_sweep/resnet18_pretrained_s44.yaml
+```
+
+Then summarise every finished full-data run (subset runs are skipped) into one page:
+
+```bash
+python scripts/summarize_runs.py        # writes runs/report.html
+```
+
+It shows the loss curves per seed, a metrics table with mean ± sd per model, and each
+model's worst mistakes.
+
 ## Reading the outputs
 
 Each run writes to `runs/<run_name>_<timestamp>/`:
@@ -102,7 +124,8 @@ How to read them:
 ## Project layout
 
 ```
-configs/        experiment configs (YAML)
+configs/        experiment configs (YAML); seed_sweep/ has the extra seeds
+scripts/        summarize_runs.py: finished runs -> runs/report.html
 pcam/
   config.py     load + validate configs
   data.py       PCam datasets, subsets, augmentation, DataLoaders
