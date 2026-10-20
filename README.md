@@ -60,6 +60,7 @@ in the YAML file:
 | `data.num_workers` | parallel data-loading processes (`0` = load in the main process) |
 | `noise.flip_fraction` | share of **train** labels to flip, 0 to 0.5 (default 0 = clean); val and test are never touched |
 | `noise.seed` | picks which labels flip; independent of `seed`, so every model sees the same flips |
+| `detection.folds` | `detect_noise.py` only: K for out-of-fold prediction (default 5) |
 | `model.name` | `small_cnn` or `resnet18` |
 | `model.pretrained` | `resnet18` only: start from ImageNet weights |
 | `training.epochs`, `batch_size`, `lr`, `weight_decay` | optimiser settings (AdamW) |
@@ -87,6 +88,23 @@ python scripts/summarize_runs.py        # writes runs/report.html
 
 It shows the loss curves per seed, a metrics table with mean ± sd per model, and each
 model's worst mistakes.
+
+### Finding suspicious labels (Phase 2)
+
+```bash
+python detect_noise.py --config configs/detection/cnn_noise10.yaml
+```
+
+Trains `detection.folds` models; each predicts only the training patches it never saw
+(out-of-fold). A label the models confidently disagree with is flagged (confident
+learning: per-class confidence thresholds). With injected noise it also scores the flags
+against the known flips. Output folder:
+
+| file | what it shows |
+|---|---|
+| `detection_metrics.json` | flags vs known flips: precision, recall, F1, AUC of the suspicion score, precision@k (k = number of flips); with clean labels only the number flagged |
+| `suspicion_scores.csv` | per patch: index, given label, out-of-fold P(tumour), suspicion (1 − P(given label)), flagged, is_flipped |
+| `flagged_indices.npy` | original train-split indices of the flagged patches |
 
 ## Reading the outputs
 
@@ -133,10 +151,12 @@ pcam/
   config.py     load + validate configs
   data.py       PCam datasets, subsets, augmentation, DataLoaders
   noise.py      flip a known fraction of train labels (Phase 2)
+  noise_detection.py  out-of-fold predictions, confident-learning flags, scoring vs known flips
   models.py     SmallCNN and ResNet18
   engine.py     training and evaluation loops
   metrics.py    accuracy, AUC, precision, recall, F1
   plots.py      curves, confusion matrix, worst-mistakes grid
   utils.py      seeding, device selection, run folders
 train.py        one experiment, end to end
+detect_noise.py find suspicious training labels (out-of-fold)
 ```
