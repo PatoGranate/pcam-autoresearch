@@ -32,6 +32,16 @@ class DataConfig:
 
 
 @dataclass
+class NoiseConfig:
+    flip_fraction: float = 0.0      # share of train labels to flip (0 = clean labels)
+    seed: int = 0                   # picks which labels flip; independent of the training seed
+
+    def __post_init__(self):
+        if not 0 <= self.flip_fraction <= 0.5:
+            raise ConfigError(f"noise.flip_fraction must be in [0, 0.5], got {self.flip_fraction}")
+
+
+@dataclass
 class ModelConfig:
     name: str = "small_cnn"         # one of MODEL_NAMES
     pretrained: bool = True         # only used by resnet18 (ImageNet weights)
@@ -62,6 +72,7 @@ class Config:
     run_name: str
     seed: int = 42
     data: DataConfig = field(default_factory=DataConfig)
+    noise: NoiseConfig = field(default_factory=NoiseConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
 
@@ -94,6 +105,7 @@ def load_config(path: str | Path) -> Config:
 
     sections = {
         "data": DataConfig,
+        "noise": NoiseConfig,
         "model": ModelConfig,
         "training": TrainingConfig,
     }
