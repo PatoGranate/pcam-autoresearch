@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 MODEL_NAMES = ("small_cnn", "resnet18")
+DETECTION_METHODS = ("out_of_fold", "training_loss")
 
 
 class ConfigError(ValueError):
@@ -43,9 +44,12 @@ class NoiseConfig:
 
 @dataclass
 class DetectionConfig:
-    folds: int = 5                  # K for out-of-fold prediction (used by detect_noise.py only)
+    method: str = "out_of_fold"     # one of DETECTION_METHODS (used by detect_noise.py only)
+    folds: int = 5                  # K for out-of-fold prediction (method out_of_fold only)
 
     def __post_init__(self):
+        if self.method not in DETECTION_METHODS:
+            raise ConfigError(f"detection.method must be one of {', '.join(DETECTION_METHODS)}, got '{self.method}'")
         if self.folds < 2:
             raise ConfigError(f"detection.folds must be >= 2, got {self.folds}")
 
