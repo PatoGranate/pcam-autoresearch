@@ -167,6 +167,19 @@ How to read them:
   the tumour (or its absence) is actually inside the box. Some confident "mistakes" may be
   labelling errors rather than model errors.
 
+## Inspecting flagged patches (Phase 2e)
+
+Run both detectors with `flip_fraction: 0` (`configs/detection/cnn_noise0.yaml`, `loss_noise0.yaml`),
+then:
+
+```
+python scripts/inspect_flagged.py --oof-run runs/oof_noise0_<stamp> --loss-run runs/loss_noise0_<stamp>
+```
+
+It writes `runs/inspect_flagged_<stamp>/` with `suspects.csv` (fill in the `your_verdict` column),
+`suspects_top.png` (patches both detectors flag, most suspicious first) and `suspects_random.png`
+(random flagged patches). Judge each patch by the dashed central 32x32 box only.
+
 ## Reproducibility
 
 - Seeds are fixed for Python, NumPy and PyTorch, including DataLoader workers; the same
@@ -180,6 +193,7 @@ How to read them:
 ```
 configs/        experiment configs (YAML); seed_sweep/ has the extra seeds
 scripts/        summarize_runs.py: finished runs -> runs/report.html
+                inspect_flagged.py: grids + CSV of patches flagged on the real labels
 pcam/
   config.py     load + validate configs
   data.py       PCam datasets, subsets, augmentation, DataLoaders
