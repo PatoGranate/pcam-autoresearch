@@ -12,6 +12,7 @@ import yaml
 
 MODEL_NAMES = ("small_cnn", "resnet18")
 DETECTION_METHODS = ("out_of_fold", "training_loss")
+CLEANING_MODES = ("none", "remove", "downweight")
 
 
 class ConfigError(ValueError):
@@ -55,6 +56,21 @@ class DetectionConfig:
 
 
 @dataclass
+class CleaningConfig:
+    mode: str = "none"              # one of CLEANING_MODES: what to do with flagged train patches
+    flagged_path: str = ""          # flagged_indices.npy written by detect_noise.py (same seed + subset!)
+    downweight_factor: float = 0.1  # downweight mode: loss weight of a flagged patch (1 = unchanged)
+
+    def __post_init__(self):
+        if self.mode not in CLEANING_MODES:
+            raise ConfigError(f"cleaning.mode must be one of {', '.join(CLEANING_MODES)}, got '{self.mode}'")
+        if self.mode != "none" and not self.flagged_path:
+            raise ConfigError(f"cleaning.mode '{self.mode}' needs cleaning.flagged_path")
+        if not 0 <= self.downweight_factor <= 1:
+            raise ConfigError(f"cleaning.downweight_factor must be in [0, 1], got {self.downweight_factor}")
+
+
+@dataclass
 class ModelConfig:
     name: str = "small_cnn"         # one of MODEL_NAMES
     pretrained: bool = True         # only used by resnet18 (ImageNet weights)
@@ -87,6 +103,7 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     noise: NoiseConfig = field(default_factory=NoiseConfig)
     detection: DetectionConfig = field(default_factory=DetectionConfig)
+    cleaning: CleaningConfig = field(default_factory=CleaningConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
 
@@ -122,6 +139,7 @@ def load_config(path: str | Path) -> Config:
         "data": DataConfig,
         "noise": NoiseConfig,
         "detection": DetectionConfig,
+        "cleaning": CleaningConfig,
         "model": ModelConfig,
         "training": TrainingConfig,
     }

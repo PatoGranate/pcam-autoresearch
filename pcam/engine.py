@@ -26,10 +26,13 @@ def train_one_epoch(
     device: torch.device,
     log_prefix: str = "",
     loss_record: list | None = None,
+    sample_weights: np.ndarray | None = None,
 ) -> tuple[float, float]:
     """One pass over the training data. Returns (mean loss, accuracy).
 
     Prints a progress line roughly every 10% of the epoch, starting with `log_prefix`.
+    If `sample_weights` is given (indexed by patch index), the batch loss is the weighted mean of the
+    per-patch losses, so down-weighted patches pull less on the gradient.
     If `loss_record` is a list, each batch appends (patch indices, per-patch losses) to it.
     These are the losses of the very forward pass used for training, so recording is free.
     """
@@ -44,7 +47,12 @@ def train_one_epoch(
         labels = labels.to(device, non_blocking=True).float()
 
         logits = model(images)
-        loss = loss_fn(logits, labels)
+        if sample_weights is None:
+            loss = loss_fn(logits, labels)
+        else:
+            weights = torch.from_numpy(sample_weights[indices.numpy()]).to(device)
+            per_patch = F.binary_cross_entropy_with_logits(logits, labels, reduction="none")
+            loss = (per_patch * weights).sum() / weights.sum().clamp_min(1e-8)
         if loss_record is not None:
             per_patch = F.binary_cross_entropy_with_logits(logits.detach(), labels, reduction="none")
             loss_record.append((indices.numpy(), per_patch.cpu().numpy()))
