@@ -82,7 +82,7 @@ def cleaning_section(runs_dir: Path) -> str:
             rows.append([arm, str(s["n_seeds"])] + [f"{s[k]['mean']:.3f} &plusmn; {s[k]['sd']:.3f}"
                                                      for k in ("auc", "accuracy", "f1")])
     return ("<h2>3. Noisy vs cleaned training</h2><p>10% flipped labels, 10% subset; mean &plusmn; sd over seeds. "
-            "With so few seeds the sd is as large as the gaps between arms, so read differences carefully.</p>"
+            "Only a few seeds, so treat small gaps with caution.</p>"
             + table(["arm", "seeds", "test AUC", "accuracy", "F1"], rows))
 
 
