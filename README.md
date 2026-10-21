@@ -180,6 +180,27 @@ It writes `runs/inspect_flagged_<stamp>/` with `suspects.csv` (fill in the `your
 `suspects_top.png` (patches both detectors flag, most suspicious first) and `suspects_random.png`
 (random flagged patches). Judge each patch by the dashed central 32x32 box only.
 
+## Phase 2 summary
+
+Phase 2 asks: if some training labels are wrong, can we find them, and does removing them help?
+The steps, each with its own section above:
+
+1. **Inject noise** (`noise.flip_fraction`): flip a known share of train labels.
+2. **Detect** (`detect_noise.py`): out-of-fold confident learning or training-loss ranking,
+   scored against the known flips.
+3. **Clean and compare** (`scripts/run_cleaning_matrix.py`): clean / noisy / remove / downweight.
+4. **Inspect** (`scripts/inspect_flagged.py`): look at what the detectors flag on the real labels.
+
+All numbers (noise effect, detector precision/recall, cleaning matrix, flag counts) are collected
+from the run folders into one page, with no hand-written conclusions:
+
+```bash
+python scripts/phase2_results.py        # writes runs/phase2_results.html
+```
+
+Phase 2 experiments use `data.subset_fraction: 0.1` and a small CNN, so results show the method
+working, not final accuracy. Everything is config in, `metrics.json` / `detection_metrics.json` out.
+
 ## Reproducibility
 
 - Seeds are fixed for Python, NumPy and PyTorch, including DataLoader workers; the same
@@ -194,6 +215,8 @@ It writes `runs/inspect_flagged_<stamp>/` with `suspects.csv` (fill in the `your
 configs/        experiment configs (YAML); seed_sweep/ has the extra seeds
 scripts/        summarize_runs.py: finished runs -> runs/report.html
                 inspect_flagged.py: grids + CSV of patches flagged on the real labels
+                phase2_results.py: Phase 2 numbers -> runs/phase2_results.html
+                run_cleaning_matrix.py: noisy vs cleaned training, several seeds
 pcam/
   config.py     load + validate configs
   data.py       PCam datasets, subsets, augmentation, DataLoaders
