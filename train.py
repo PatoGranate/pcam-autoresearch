@@ -64,6 +64,9 @@ def main() -> None:
         np.save(run_dir / "flipped_indices.npy", train_ds.flipped_indices)
         print(f"Label noise: flipped {noise_info['n_flipped']:,} of {sizes['train']:,} train labels")
 
+    if train_ds.cleaning_info:
+        print(f"Cleaning: {train_ds.cleaning_info}")
+
     model = build_model(cfg.model).to(device)
     print(f"Model: {cfg.model.name} ({count_parameters(model):,} trainable parameters)")
 
@@ -82,7 +85,8 @@ def main() -> None:
     for epoch in range(1, cfg.training.epochs + 1):
         epoch_start = time.time()
         train_loss, train_acc = train_one_epoch(model, loaders["train"], optimizer, loss_fn, device,
-                                                log_prefix=f"  epoch {epoch}/{cfg.training.epochs} ")
+                                                log_prefix=f"  epoch {epoch}/{cfg.training.epochs} ",
+                                                sample_weights=train_ds.sample_weights)
         val = evaluate(model, loaders["val"], loss_fn, device)
         val_metrics = compute_metrics(val.labels, val.probs)
         val_auc = val_metrics["auc"] if val_metrics["auc"] is not None else 0.0
@@ -133,6 +137,7 @@ def main() -> None:
         "n_val": sizes["val"],
         "n_test": sizes["test"],
         "noise": noise_info,
+        "cleaning": train_ds.cleaning_info or {"mode": "none"},
         "best_epoch": best_epoch,
         "best_val_auc": best_auc,
         "test": test_metrics,

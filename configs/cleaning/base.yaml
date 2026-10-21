@@ -1,0 +1,28 @@
+# Base config for the noisy-vs-cleaned matrix (scripts/run_cleaning_matrix.py overrides
+# seed, run_name, noise and cleaning per arm). Small CNN, 10% subset, 10% flipped labels.
+run_name: cleaning_base
+seed: 42
+
+data:
+  root: data
+  subset_fraction: 0.1
+  num_workers: 2
+
+noise:
+  flip_fraction: 0.10
+  seed: 0
+
+detection:
+  method: training_loss   # the cheap detector; flags feed the remove / downweight arms
+
+model:
+  name: small_cnn
+
+training:
+  epochs: 5
+  batch_size: 128
+  lr: 0.001
+  weight_decay: 0.0001
+
+cleaning:
+  downweight_factor: 0.1

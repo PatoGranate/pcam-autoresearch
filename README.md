@@ -113,6 +113,32 @@ With injected noise both score the flags against the known flips. Output folder:
 | `flagged_indices.npy` | original train-split indices of the flagged patches |
 | `loss_history.npy` | `training_loss` only: per-patch loss, shape (epochs, patches), same order as the CSV (`oof_prob_tumour` there is the epoch-averaged P(tumour) for this method) |
 
+### Training on cleaned labels (Phase 2)
+
+Any training config can drop or down-weight the patches a detector flagged:
+
+```yaml
+cleaning:
+  mode: remove            # none (default) | remove | downweight
+  flagged_path: runs/<detector run>/flagged_indices.npy
+  downweight_factor: 0.1  # downweight only: loss weight of a flagged patch
+```
+
+Flags are original-split indices, so they only fit the subset they were made on (same
+`seed` and `data.subset_fraction`); a mismatch stops with an error. `metrics.json` gets a
+`cleaning` entry: patches flagged, how many of them were truly flipped, patches removed.
+
+One command runs the whole comparison (about 35 min per seed with the default config):
+
+```bash
+python scripts/run_cleaning_matrix.py --seeds 42 43 44
+```
+
+Per seed it runs the training-loss detector, then trains four arms from
+`configs/cleaning/base.yaml`: `clean` (no noise), `noisy`, `remove`, `downweight`. It is
+resumable (`runs/cleaning_matrix/state.json`) and writes `runs/cleaning_matrix/summary.json`
+with mean ± sd of the test metrics per arm.
+
 ## Reading the outputs
 
 Each run writes to `runs/<run_name>_<timestamp>/`:

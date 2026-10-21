@@ -74,6 +74,8 @@ class PCamPatches(Dataset):
         self.indices = indices
         self.transform = transform
         self._images = None   # opened lazily, separately in each worker process
+        self.sample_weights = None    # optional per-patch loss weights (see apply_cleaning)
+        self.cleaning_info = None
 
     def load_image(self, index: int) -> np.ndarray:
         """Raw patch as a (96, 96, 3) uint8 array, without any transform."""
@@ -122,7 +124,37 @@ def build_datasets(cfg: Config) -> dict[str, PCamPatches]:
     train.clean_labels = train.labels.copy()
     train.flipped_indices = inject_label_noise(train.labels, train.indices,
                                                cfg.noise.flip_fraction, cfg.noise.seed)
+    if cfg.cleaning.mode != "none":
+        apply_cleaning(train, cfg)
     return datasets
+
+
+def apply_cleaning(train: PCamPatches, cfg: Config) -> None:
+    """Remove flagged patches from `train`, or give them a smaller loss weight.
+
+    Sets `train.cleaning_info` (what happened, scored against the known flips) and,
+    in downweight mode, `train.sample_weights` (indexed by original patch index).
+    """
+    flagged = np.load(cfg.cleaning.flagged_path)
+    # Flags are original-split indices, so they only make sense for the subset they came from.
+    # A different seed draws a different subset; refuse instead of silently cleaning nothing.
+    missing = int((~np.isin(flagged, train.indices)).sum())
+    if missing:
+        raise ValueError(f"{missing} of {len(flagged)} flagged patches in {cfg.cleaning.flagged_path} are not in "
+                         f"this train subset. Re-run detect_noise.py with the same seed and data.subset_fraction.")
+    is_flagged = np.isin(train.indices, flagged)
+    flipped_flagged = int(np.isin(flagged, train.flipped_indices).sum())
+    info = {"mode": cfg.cleaning.mode, "n_flagged": int(len(flagged)),
+            "n_flagged_that_were_flipped": flipped_flagged,
+            "n_flipped_total": int(len(train.flipped_indices))}
+    if cfg.cleaning.mode == "remove":
+        train.indices = train.indices[~is_flagged]
+        info["n_removed"] = int(is_flagged.sum())
+    else:   # downweight
+        train.sample_weights = np.ones(len(train.labels), dtype=np.float32)
+        train.sample_weights[train.indices[is_flagged]] = cfg.cleaning.downweight_factor
+        info["downweight_factor"] = cfg.cleaning.downweight_factor
+    train.cleaning_info = info
 
 
 def build_dataloaders(cfg: Config, device: torch.device) -> dict[str, DataLoader]:
