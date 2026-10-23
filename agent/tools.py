@@ -19,10 +19,18 @@ tools = [
     }
 ]
 
+# Repository absolute path
 REPO_ROOT = Path(__file__).parent.parent.resolve()
 
-
 def resolve_repo_path(path_str):
+    """ Turn input path string into absolute Path
+
+    Args:
+        path_str (str) : input folder/file path string
+    
+    Returns:
+        root_path (Path) : absolute path for input path string
+    """
     path = Path(path_str)
     root_path = Path(REPO_ROOT / path).resolve()
 
@@ -33,11 +41,20 @@ def resolve_repo_path(path_str):
 
 
 def list_files(path_str):
+    """ List the contents of an input folder
+
+    Args:
+        path_str (str) : input folder path string
+    Returns:
+        contents_str (str) : names of files and subdirectories within input folder path
+    """
     folder_contents = []
 
     try:
+        # Get absolute path
         root_path = resolve_repo_path(path_str)
 
+        # For each item in the root path, add to list with / if folder
         for subdir in root_path.iterdir():
             if subdir.is_dir():
                 folder_contents.append(f"{subdir.name}/")
@@ -53,6 +70,7 @@ def list_files(path_str):
     except FileNotFoundError:
         return "Error: Input path was not found"
 
+    # If no contents in folder return (empty folder), else return contents separated by new lines
     if len(folder_contents) == 0:
         contents_str = "(empty folder)"
     else:
@@ -60,6 +78,7 @@ def list_files(path_str):
         contents_str = "\n".join(folder_contents)
 
     return contents_str
+
 
 if __name__ == "__main__":
     subdir = list_files("C:\\Windows")
