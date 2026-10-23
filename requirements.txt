@@ -13,3 +13,6 @@ pyyaml==6.0.3
 numpy==2.5.2
 scikit-learn==1.9.1
 matplotlib==3.11.2
+
+# Phase 3: the research agent (Anthropic API)
+anthropic==2.1.0

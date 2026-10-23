@@ -3,6 +3,9 @@
 __pycache__/
 *.pyc
 
+# Editor settings (machine-specific)
+.vscode/
+
 # Dataset (~7.5 GB) and experiment outputs stay local
 data/
 runs/
