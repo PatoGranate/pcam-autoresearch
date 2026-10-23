@@ -80,6 +80,21 @@ def list_files(path_str):
     return contents_str
 
 
+# Tool dictionary, name : function
+TOOL_FUNCTIONS = {"list_files": list_files}
+
+
+def run_tool(name, tool_input):
+    if name in TOOL_FUNCTIONS:
+        try: 
+            return TOOL_FUNCTIONS[name](**tool_input)
+        except TypeError:
+            return f"Error: {name} tool received unexpected inputs"
+
+    else:
+        return f"Error: Unknown tool: {name}"
+
+
 if __name__ == "__main__":
-    subdir = list_files("C:\\Windows")
-    print(subdir)
+    output = run_tool("list_files", {"path_str": "x"})
+    print(output)
