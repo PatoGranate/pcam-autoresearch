@@ -1,7 +1,10 @@
 import anthropic
-from types import SimpleNamespace
-
 from tools import tools, run_tool
+
+MODEL = "claude-haiku-5-5"
+MAX_TOKENS = 4096
+client = anthropic.Anthropic()
+
 
 def call_model(messages):
     """ Send message history to model and ask it for a response or tool use
@@ -13,10 +16,9 @@ def call_model(messages):
     Returns:
         response (SimpleNamespace) : stop_reason, content. Stop_reason gives information about the following content.
     """
-    client = anthropic.Anthropic()
     response = client.messages.create(
         model = MODEL,
-        max_tokens = 1024,
+        max_tokens = MAX_TOKENS,
         tools = tools,
         tool_choice = {"type": "auto", "disable_parallel_tool_use": True},
         messages = messages,
@@ -35,32 +37,14 @@ def call_model_no_tools(messages):
         response (SimpleNamespace) : stop_reason, content. Stop_reason gives information about the following content. In this
         case stop_reason should only be end_turn.
     """
-    client = anthropic.Anthropic()
     response = client.messages.create(
     model = MODEL,
-    max_tokens = 1024,
+    max_tokens = MAX_TOKENS,
     tools = tools,
     tool_choice = {"type": "none"},
     messages = messages,
     )
     return response
-
-
-def call_model_fake(messages, turn):
-    """temporary test in case there is no API key"""
-    if turn == 1:
-        stop_reason = "tool_use"
-        content = [
-            SimpleNamespace(type="text", text="I'll look at the configs folder."),
-            SimpleNamespace(type="tool_use", id="toolu_01ABC", name="list_files", input={"path_str": "configs"}),
-        ]
-    elif turn == 2:
-        stop_reason = "end_turn"
-        content = [
-            SimpleNamespace(type="text", text="The configs folder contains baseline.yaml, resnet18.yaml and some subfolders."),
-        ]
-
-    return SimpleNamespace(stop_reason = stop_reason, content = content)
 
 
 def run_agent(goal):
@@ -80,9 +64,9 @@ def run_agent(goal):
         }
     ]
 
-    # Set a max limit of turns to prevent agent from using tools infinitely
+    # Set a max limit of turns to prevent agent from using tools infinitely, and initialize an error counter
     max_turns = 10
-
+    error_counter = 0
     
     for i in range(max_turns):
         # For each turn, call the model, retrieve its response, and extract the stop_reason and content
@@ -92,39 +76,54 @@ def run_agent(goal):
 
         # If end turn (no more tools requested), return the final output text from the model
         if stop_reason == "end_turn":
-            text = next(block for block in content if block.type == "text")
+            text = next((block for block in content if block.type == "text"), None)
+            if text is None:
+                return "Agent stopped without a final answer"
             return text.text
 
         # If a tool was requested, run the tool in tools.py
         elif stop_reason == "tool_use":
             tool_use = next(block for block in content if block.type == "tool_use")
-            tool_result = run_tool(tool_use.name, tool_use.input)
+            tool_result, is_error = run_tool(tool_use.name, tool_use.input)
 
         # If another stop_reason is recorded, break with error message
         else:
             return f"Unexpected stop reason: {stop_reason}"
 
+        if is_error:
+            error_counter += 1
+        else:
+            error_counter = 0
+
         # Save both the assistant and user output messages to input as context for the next call
         messages.append({"role": "assistant",
-                         "content": content},)
+                            "content": content},)
         messages.append({"role": "user",
-                         "content": [{"type": "tool_result", 
-                                      "tool_use_id": tool_use.id, 
-                                      "content": tool_result}]})
+                            "content": [{"type": "tool_result", 
+                                        "is_error": is_error,
+                                        "tool_use_id": tool_use.id, 
+                                        "content": tool_result}]})
 
-        # If any error using tools, break the loop and make a single text only call.
-        if tool_result.startswith("Error:"):
+        # If three errors in a row, cut the agent from the loop
+        if error_counter >= 3:
+            print("Error counter maxed out")
             break
+
+        if i == 9:
+            print("Agent ran out of turns")
+
+    # Final text only call
+    messages.append({"role": "user",
+                     "content": "You are not able to use any more tools. Summarise what you found so far in your last text only call"})
 
     final_response = call_model_no_tools(messages)
     content = final_response.content
-    text = next(block for block in content if block.type == "text")
+    text = next((block for block in content if block.type == "text"), None)
+    if text is None:
+        return "Agent stopped without a final answer"
     return text.text
 
-
-MODEL = "claude-haiku-5-5"
-
 if __name__ == "__main__":
-    initial_message = "Look at the configs folder, and tell me what it contains."
+    initial_message = "Try to read a few files in this repo, come back with what you find"
     output = run_agent(initial_message)
     print(output)
