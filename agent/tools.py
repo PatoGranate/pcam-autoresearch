@@ -40,6 +40,9 @@ tools = [
 ]
 
 
+class ToolError(Exception):
+    pass
+
 # Repository absolute path
 REPO_ROOT = Path(__file__).parent.parent.resolve()
 
@@ -69,12 +72,15 @@ def list_files(path_str):
     Returns:
         contents_str (str) : names of files and subdirectories within input folder path
     """
+    if path_str == "":
+        raise ToolError("Path string input was an empty string")
+    
     folder_contents = []
 
     try:
         # Get absolute path
         root_path = resolve_repo_path(path_str)
-            
+
         # For each item in the root path, add to list with / if folder
         for subdir in root_path.iterdir():
             if subdir.is_dir():
@@ -82,14 +88,18 @@ def list_files(path_str):
             else:
                 folder_contents.append(subdir.name)
 
-    except PermissionError:
-        return "Error: Paths pointing outside the repository may not be searched"
+    except PermissionError as e:
+        raise ToolError(f"Paths pointing outside the repository may not be searched (or there was an access problem: {e})") from None
     
-    except NotADirectoryError:
-        return "Error: Input path is not a folder"
+    except NotADirectoryError as e:
+        raise ToolError(f"Input path is not a folder: {e}") from None
     
-    except FileNotFoundError:
-        return "Error: Input path was not found"
+    except FileNotFoundError as e:
+        raise ToolError(f"Input path was not found: {e}") from None
+
+    # These don't do anything, but serve as a reminder for run_tools to handle exceptions that weren't previously caught
+    except Exception:
+        raise
 
     # If no contents in folder return (empty folder), else return contents separated by new lines
     if len(folder_contents) == 0:
@@ -108,6 +118,9 @@ def read_file(path_str, encoding = "UTF-8"):
         path_str (str) : input file path string
         encoding (str) : string name for file encoding
     """
+    if path_str == "":
+        raise ToolError("Path string input was an empty string")
+    
     # Set a maximum character limit for large files to be truncated early
     max_char = 10000
 
@@ -115,46 +128,54 @@ def read_file(path_str, encoding = "UTF-8"):
         root_path = resolve_repo_path(path_str)
 
         if not root_path.exists():
-            return "Error: Input path was not found"
+            raise ToolError("Input path was not found")
 
         if root_path.is_file():
             # Open the file in binary mode and search for b"\x00" in the first thousand characters to determine if file is binary
             with root_path.open(mode = "rb") as file:
                 chunk = file.read(1000)
                 if b"\x00" in chunk:
-                    return "Error: File looks binary and can't be read as text"
+                    raise ToolError("File looks binary and can't be read as text")
 
-            file_length = root_path.stat().st_size
+            # Read file content
+            with root_path.open(mode = "r", encoding = encoding) as file:
+                file_content = file.read(max_char+1)
 
-            # Compare file length to max car and determine whether to truncate or not
-            if file_length < max_char:
-                return root_path.read_text(encoding = encoding)
+            # If over length limit, truncate and return as info
+            if len(file_content) == 0:
+                return "(empty file)"
+            elif len(file_content) > max_char:
+                file_length = root_path.stat().st_size
+                return f"File was too long and had to be truncated at a max of {max_char} characters. File length was: {file_length} bytes. Read file content: {file_content[:max_char]}"
+
             else:
-                with root_path.open(mode = "r", encoding = encoding) as file:
-                    file_content = file.read(max_char)
-                    return f"File was too long and had to be truncated at a max of {max_char} characters. File length was: {file_length}. Read file content: {file_content}"
-        
+                return file_content
+            
         elif root_path.is_dir():
-            return "Error: Path is a folder, not a file. Possibly look at list_files tool instead?"
+            raise ToolError("Path is a folder, not a file. Possibly look at list_files tool instead?")
 
         else:
-            return "Error: Path did not lead to a file"
+            raise ToolError("Path did not lead to a file")
 
     # If decoding error, return it 
     except UnicodeDecodeError as e:
-        return f"Error: Failed to decode file with {encoding}: {e}"
+        raise ToolError(f"Failed to decode file with {encoding}: {e}")
     
     except PermissionError as e:
-        return f"Error: Paths pointing outside the repository may not be read, or there was an access problem: {e}"
+        raise ToolError(f"Paths pointing outside the repository may not be read (or there was an access problem: {e})")
 
     except OSError as e:
-        return f"Error: Failed to read file: {e}"
+        raise ToolError(f"Failed to read file: {e}")
     
     # If encoding input is incorrect return error
     except LookupError as e:
-        return f"Error: Entered encoding: {encoding} was not valid: {e}"
+        raise ToolError(f"Entered encoding: {encoding} was not valid: {e}")
 
-    
+    # These don't do anything, but serve as a reminder for run_tools to handle exceptions that weren't previously caught
+    except Exception:
+        raise
+
+
 # Tool dictionary, name : function
 TOOL_FUNCTIONS = {"list_files": list_files, "read_file": read_file}
 
@@ -162,14 +183,23 @@ TOOL_FUNCTIONS = {"list_files": list_files, "read_file": read_file}
 def run_tool(name, tool_input):
     if name in TOOL_FUNCTIONS:
         try: 
-            return TOOL_FUNCTIONS[name](**tool_input)
-        except TypeError:
-            return f"Error: {name} tool received unexpected inputs"
+            result = TOOL_FUNCTIONS[name](**tool_input)
+            return result, False
+        
+        except ToolError as e:
+            return str(e), True
+        
+        except TypeError as e:
+            return f"Error: {name} tool received unexpected inputs: {e}", True
+
+        except Exception as e:
+            print(f"Unexpected error in {name}: {e}")
+            return f"Unexpected error in {name}: {e}", True
 
     else:
-        return f"Error: Unknown tool: {name}"
+        return f"Error: Unknown tool: {name}", True
 
 
 if __name__ == "__main__":
-    output = run_tool("read_file", {"path_str": "README.md", "encoding": "cp1252"})
+    output = run_tool("list_files", {"path_str": "C:\\Windows"})
     print(output)
