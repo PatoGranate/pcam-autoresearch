@@ -3,7 +3,7 @@ from pathlib import Path
 tools = [
     {
         "name": "list_files",
-        "description": "Returns a list of files and subfolders of an input folder. Input folder must be path with respect to repo root;"
+        "description": "Returns a list of files and subfolders of an input folder. Input folder must be path with respect to repo root; "
         "returns files as strings, and folders contain a slash '/' at the end of the name to indicate a directory. If input path is "
         "invalid or outside the repository, returns error information and tool call will be rejected.",
         "input_schema": {
@@ -16,8 +16,29 @@ tools = [
             },
             "required": ["path_str"]
         }
+    },
+    {
+        "name": "read_file",
+        "description": "Read the contents of a specified input file. The input to the tool must be a str relative to the repo root, and "
+        "be a file within the repository. If the input path is invalid or outside the repository, returns error information and tool "
+        "call will be rejected. Uses UTF-8 decoding unless otherwise specified by the 'encoding' argument.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path_str": {
+                    "type": "string",
+                    "description": "Path to input file relative to repo root, e.g. 'agent/agent.py'"
+                },
+                "encoding": {
+                    "type": "string",
+                    "description": "encoding name as a string, e.g. 'cp1252'. If none given, UTF-8 used as default."
+                }
+            },
+            "required": ["path_str"]
+        }
     }
 ]
+
 
 # Repository absolute path
 REPO_ROOT = Path(__file__).parent.parent.resolve()
@@ -53,7 +74,7 @@ def list_files(path_str):
     try:
         # Get absolute path
         root_path = resolve_repo_path(path_str)
-
+            
         # For each item in the root path, add to list with / if folder
         for subdir in root_path.iterdir():
             if subdir.is_dir():
@@ -80,8 +101,62 @@ def list_files(path_str):
     return contents_str
 
 
+def read_file(path_str, encoding = "UTF-8"):
+    """ Read the contents of a file
+    
+    Args:
+        path_str (str) : input file path string
+        encoding (str) : string name for file encoding
+    """
+    # Set a maximum character limit for large files to be truncated early
+    max_char = 10000
+
+    try:
+        root_path = resolve_repo_path(path_str)
+
+        if not root_path.exists():
+            return "Error: Input path was not found"
+
+        if root_path.is_file():
+            # Open the file in binary mode and search for b"\x00" in the first thousand characters to determine if file is binary
+            with root_path.open(mode = "rb") as file:
+                chunk = file.read(1000)
+                if b"\x00" in chunk:
+                    return "Error: File looks binary and can't be read as text"
+
+            file_length = root_path.stat().st_size
+
+            # Compare file length to max car and determine whether to truncate or not
+            if file_length < max_char:
+                return root_path.read_text(encoding = encoding)
+            else:
+                with root_path.open(mode = "r", encoding = encoding) as file:
+                    file_content = file.read(max_char)
+                    return f"File was too long and had to be truncated at a max of {max_char} characters. File length was: {file_length}. Read file content: {file_content}"
+        
+        elif root_path.is_dir():
+            return "Error: Path is a folder, not a file. Possibly look at list_files tool instead?"
+
+        else:
+            return "Error: Path did not lead to a file"
+
+    # If decoding error, return it 
+    except UnicodeDecodeError as e:
+        return f"Error: Failed to decode file with {encoding}: {e}"
+    
+    except PermissionError as e:
+        return f"Error: Paths pointing outside the repository may not be read, or there was an access problem: {e}"
+
+    except OSError as e:
+        return f"Error: Failed to read file: {e}"
+    
+    # If encoding input is incorrect return error
+    except LookupError as e:
+        return f"Error: Entered encoding: {encoding} was not valid: {e}"
+
+    
 # Tool dictionary, name : function
-TOOL_FUNCTIONS = {"list_files": list_files}
+TOOL_FUNCTIONS = {"list_files": list_files, "read_file": read_file}
 
 
 def run_tool(name, tool_input):
@@ -96,5 +171,5 @@ def run_tool(name, tool_input):
 
 
 if __name__ == "__main__":
-    output = run_tool("list_files", {"path_str": "x"})
+    output = run_tool("read_file", {"path_str": "README.md", "encoding": "cp1252"})
     print(output)

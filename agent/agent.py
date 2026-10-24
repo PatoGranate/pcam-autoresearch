@@ -116,6 +116,6 @@ def run_agent(goal):
     return text.text
 
 if __name__ == "__main__":
-    initial_message = "Look at the configs folder, and tell me what it contains."
+    initial_message = "Try to open the agent.py file in agent/ and tell me what it contains"
     output = run_agent(initial_message)
     print(output)
