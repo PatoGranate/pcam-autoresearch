@@ -124,6 +124,6 @@ def run_agent(goal):
     return text.text
 
 if __name__ == "__main__":
-    initial_message = "Try to read a few files in this repo, come back with what you find"
+    initial_message = "I want you to write me a simple message in a text file. Try to save it somewhere else than in configs/agent"
     output = run_agent(initial_message)
     print(output)

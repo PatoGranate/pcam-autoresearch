@@ -1,11 +1,12 @@
 from pathlib import Path
+import tempfile
 
 tools = [
     {
         "name": "list_files",
         "description": "Returns a list of files and subfolders of an input folder. Input folder must be path with respect to repo root; "
         "returns files as strings, and folders contain a slash '/' at the end of the name to indicate a directory. If input path is "
-        "invalid or outside the repository, returns error information and tool call will be rejected.",
+        "invalid or outside the repository, returns error information and tool call will be rejected. Use '.' for root repository",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -36,6 +37,33 @@ tools = [
             },
             "required": ["path_str"]
         }
+    },
+    {
+        "name": "write_file",
+        "description": "Write to an existing file, or create a new one to write - replaces the whole file. The input to the tool must be "
+        "a str relative to the repo root, and be within the repository. If the input path is invalid or outside the repository, returns "
+        "error information and tool call will be rejected. Within the repository, access is only granted to write within configs/agent; "
+        "anything else will return PermissionError. The file_content parameter should contain the full text of the file, and it replaces "
+        "the WHOLE file. Use real line breaks, and for YAML use spaces for indentation, not tabs. Uses UTF-8 encoding unless otherwise "
+        "specified by the 'encoding' argument",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path_str": {
+                    "type": "string",
+                    "description": "Path to input file relative to repo root, e.g. 'configs/agent/test.txt'"
+                },
+                "file_content": {
+                    "type": "string",
+                    "description": "String containing the content to be written within the input file string: path_str. e.g. 'Hello world'"
+                },
+                "encoding": {
+                    "type": "string",
+                    "description": "encoding name as a string, e.g. 'cp1252'. If none given, UTF-8 used as default."
+                }
+            },
+            "required": ["path_str", "file_content"]
+        }
     }
 ]
 
@@ -45,12 +73,19 @@ class ToolError(Exception):
 
 # Repository absolute path
 REPO_ROOT = Path(__file__).parent.parent.resolve()
+# Limit access to files/folders under each specific action. list_files is least restrictive, write_files is most restrictive
+ACTION_PERMISSIONS = {"list": ["configs/", "pcam/", "scripts/", "runs/", "agent/"], 
+                      "read": ["configs/", "pcam/", "scripts/", "runs/", "agent/", "train.py", "detect_noise.py", "README.md", "CLAUDE.md",
+                                "requirements.txt", ".gitignore", "notes.md"], 
+                      "write": ["configs/agent/"]}
 
-def resolve_repo_path(path_str):
+
+def resolve_repo_path(path_str, action):
     """ Turn input path string into absolute Path
 
     Args:
         path_str (str) : input folder/file path string
+        action (str) : identity of tool calling the resolve_repo_path function
     
     Returns:
         root_path (Path) : absolute path for input path string
@@ -59,9 +94,16 @@ def resolve_repo_path(path_str):
     root_path = Path(REPO_ROOT / path).resolve()
 
     if root_path.is_relative_to(REPO_ROOT):
-        return root_path
-    else:
-        raise PermissionError
+        # Allow the agent to list everything one level deep, but prevent .venv, .vscode, .claude etc for context and token preservation
+        if action == "list" and root_path == REPO_ROOT:
+            return root_path
+
+        # If the file/folder being accessed is within the permitted list for that action, resolve the path, otherwise don't.
+        for permission_path_str in ACTION_PERMISSIONS[action]:
+            if root_path.is_relative_to(Path(REPO_ROOT / permission_path_str).resolve()):
+                return root_path
+            
+    raise PermissionError
 
 
 def list_files(path_str):
@@ -79,7 +121,7 @@ def list_files(path_str):
 
     try:
         # Get absolute path
-        root_path = resolve_repo_path(path_str)
+        root_path = resolve_repo_path(path_str, action="list")
 
         # For each item in the root path, add to list with / if folder
         for subdir in root_path.iterdir():
@@ -89,7 +131,7 @@ def list_files(path_str):
                 folder_contents.append(subdir.name)
 
     except PermissionError as e:
-        raise ToolError(f"Paths pointing outside the repository may not be searched (or there was an access problem: {e})") from None
+        raise ToolError(f"Path access denied (or there was an access problem: {e})") from None
     
     except NotADirectoryError as e:
         raise ToolError(f"Input path is not a folder: {e}") from None
@@ -117,6 +159,9 @@ def read_file(path_str, encoding = "UTF-8"):
     Args:
         path_str (str) : input file path string
         encoding (str) : string name for file encoding
+
+    Returns:
+        file_content (str) : content read from the input file
     """
     if path_str == "":
         raise ToolError("Path string input was an empty string")
@@ -125,7 +170,7 @@ def read_file(path_str, encoding = "UTF-8"):
     max_char = 10000
 
     try:
-        root_path = resolve_repo_path(path_str)
+        root_path = resolve_repo_path(path_str, action="read")
 
         if not root_path.exists():
             raise ToolError("Input path was not found")
@@ -162,7 +207,7 @@ def read_file(path_str, encoding = "UTF-8"):
         raise ToolError(f"Failed to decode file with {encoding}: {e}")
     
     except PermissionError as e:
-        raise ToolError(f"Paths pointing outside the repository may not be read (or there was an access problem: {e})")
+        raise ToolError(f"Path access denied (or there was an access problem: {e})")
 
     except OSError as e:
         raise ToolError(f"Failed to read file: {e}")
@@ -176,8 +221,67 @@ def read_file(path_str, encoding = "UTF-8"):
         raise
 
 
+def write_file(path_str, file_content, encoding="UTF-8"):
+    """ Write file content to an input file given by path_str with a specific encoding, default UTF-8
+    
+    Args: 
+        path_str (str) : input file path string
+        file_content (str) : content to be written to the input file
+        encoding (str) : string name for file encoding
+    
+    Returns:
+        msg (str) : informational message of what the function achieved
+    """
+    temp_path = None
+    try:
+        root_path = resolve_repo_path(path_str, action="write")
+
+        # Check for encoding errors before ever editing or creating the file to prevent halfway errors
+        data = file_content.encode(encoding)
+
+        # If input is a folder, write_text will not work, so raise a ToolError
+        if root_path.is_dir():
+            raise ToolError("input path_str was not a file, so cannot be written")
+
+        # Default message is simply writing
+        msg = f"Wrote input file content to {path_str}"
+
+        if not root_path.exists():
+            root_path.parent.mkdir(parents=True, exist_ok=True)
+            # If a file is created, change the message to include this
+            msg = f"Created {path_str}, and wrote input file content to it"
+
+        if file_content == "":
+            msg = f"input file_content was empty; {path_str} is now a blank file"
+
+        # Write the content to a temporary file, and then replace the root_path with the new content to prevent midway failures
+        with tempfile.NamedTemporaryFile(mode="wb", dir=root_path.parent, delete=False) as temp:
+            temp_path = Path(temp.name)
+            temp.write(data)
+        temp_path.replace(root_path)
+
+        return msg
+
+    except PermissionError as e:
+        raise ToolError(f"Path access denied (or there was an access problem: {e})")
+
+    except UnicodeEncodeError as e:
+        raise ToolError(f"Failed to encode file with {encoding}: {e}")
+
+    # If encoding input is incorrect return error
+    except LookupError as e:
+        raise ToolError(f"Entered encoding: {encoding} was not valid: {e}")
+
+    except OSError as e:
+        raise ToolError(f"Failed to write file: {e}")
+
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
 # Tool dictionary, name : function
-TOOL_FUNCTIONS = {"list_files": list_files, "read_file": read_file}
+TOOL_FUNCTIONS = {"list_files": list_files, "read_file": read_file, "write_file": write_file}
 
 
 def run_tool(name, tool_input):
@@ -201,5 +305,5 @@ def run_tool(name, tool_input):
 
 
 if __name__ == "__main__":
-    output = run_tool("list_files", {"path_str": "C:\\Windows"})
+    output = run_tool("write_file", {"path_str": "configs/agent/sub/deeptest.yaml", "file_content": "cafe", "encoding": "UTF-8"})
     print(output)
